@@ -32,7 +32,7 @@ Homepage = "https://github.com/yourusername/tinygraph"
 Issues = "https://github.com/yourusername/tinygraph/issues"
 
 # ────────────────────────────────────────────────────────────────
-# Tools configuration 
+# Tools configuration
 # ────────────────────────────────────────────────────────────────
 
 [tool.hatch.build.targets.wheel]
@@ -78,7 +78,7 @@ files = ["src/tinygraph", "tests"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
-disallow_untyped_defs = false 
+disallow_untyped_defs = false
 
 [dependency-groups]
 dev = [
@@ -86,4 +86,5 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.10",
+    "pre-commit>=4.5.1",
 ]
