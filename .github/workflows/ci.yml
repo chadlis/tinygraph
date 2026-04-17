@@ -25,16 +25,16 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --all-extras --dev
 
       - name: Lint with ruff
-        run: ruff check src tests
+        run: uv run ruff check src tests
 
       - name: Format check with ruff
-        run: ruff format --check src tests
+        run: uv run ruff format --check src tests
 
       - name: Type check with mypy
-        run: mypy src tests
+        run: uv run mypy src tests
 
       - name: Run tests
-        run: pytest --cov=tinygraph --cov-report=term-missing
+        run: uv run pytest --cov=tinygraph --cov-report=term-missing
