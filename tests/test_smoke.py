@@ -1,4 +1,5 @@
 """Smoke test: make sure the package can be imported."""
+
 from __future__ import annotations
 
 
