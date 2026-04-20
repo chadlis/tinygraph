@@ -15,8 +15,8 @@ uv pip install -e ".[dev]"
 
 ## Roadmap
 
-- [ ] StateGraph builder
-- [ ] Sequential execution
+- [x] StateGraph builder
+- [x] Sequential execution
 - [ ] Reducers
 - [ ] Conditional edges
 - [ ] Cycles
