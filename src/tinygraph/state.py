@@ -30,6 +30,7 @@ class StateGraph[StateT]:
         self.state_schema: type[StateT] = state_schema
         self.nodes: dict[str, Callable[[StateT], dict[str, Any]]] = {}
         self.edges: defaultdict[str, set[str]] = defaultdict(set)
+        self.conditional_edges: dict[str, tuple[Callable[[StateT], str], dict[str, str]]] = {}
 
     def add_node(self, name: str, node: Callable[[StateT], dict[str, Any]]) -> None:
         """Register a node function under `name`.
@@ -53,15 +54,46 @@ class StateGraph[StateT]:
         if from_node == END:
             raise ValueError(f"Non valid value {END} for source node")
         if to_node == START:
-            raise ValueError(f"None valid value {START} for target node")
+            raise ValueError(f"Non valid value {START} for target node")
         if from_node != START and from_node not in self.nodes:
             raise ValueError(f"Unknown source node: {from_node}")
         if to_node != END and to_node not in self.nodes:
             raise ValueError(f"Unknown target node: {to_node}")
+        #! TODO : remove it after parallel fan-out is impelemented
+        if self.edges.get(from_node):
+            raise ValueError(
+                f"Node '{from_node}' already has an outgoing edge. "
+                "Use `add_conditional_edges()` for branching."
+            )
+        if self.conditional_edges.get(from_node):
+            raise ValueError(f"Node '{from_node}' already has a conditional edge.")
         self.edges[from_node].add(to_node)
+
+    def add_conditional_edges(
+        self, from_node: str, path: Callable[[StateT], str], path_map: dict[str, str]
+    ) -> None:
+        if from_node == END:
+            raise ValueError("Cannot add conditional edges from END")
+        if from_node not in self.nodes:
+            raise ValueError(
+                f"Node '{from_node}' is not registered! Did you forget to call `add_node()`?"
+            )
+        for node_name in path_map.values():
+            if (node_name != END) and (node_name not in self.nodes):
+                raise ValueError(
+                    f"Node '{node_name}' is not registered! Did you forget to call `add_node()`?"
+                )
+        if len(self.edges.get(from_node, set())) > 0:
+            raise ValueError(f"Node '{from_node}' has already one or more fix edges!")
+        if self.conditional_edges.get(from_node):
+            raise ValueError(f"Node '{from_node}' already has a conditional edge.")
+        self.conditional_edges[from_node] = (path, path_map)
 
     def successors(self, name: str) -> set[str]:
         """Return the direct successors of `name` (empty set if none)."""
+        cond = self.conditional_edges.get(name)
+        if cond:
+            return self.edges.get(name, set()) | set(cond[1].values())
         return self.edges.get(name, set())
 
     def compile(self) -> CompiledGraph[StateT]:

@@ -147,7 +147,7 @@ def test_recursion_limit_exceeded() -> None:
         builder.add_node(f"n{i}", noop)
     builder.add_edge(START, "n0")
     for i in range(9):
-        builder.add_edge(f"n{i}", f"n{i+1}")
+        builder.add_edge(f"n{i}", f"n{i + 1}")
     builder.add_edge("n9", END)
 
     graph = builder.compile()
@@ -221,7 +221,7 @@ def test_recursion_limit_can_be_increased() -> None:
         builder.add_node(f"n{i}", noop)
     builder.add_edge(START, "n0")
     for i in range(29):
-        builder.add_edge(f"n{i}", f"n{i+1}")
+        builder.add_edge(f"n{i}", f"n{i + 1}")
     builder.add_edge("n29", END)
 
     graph = builder.compile()
