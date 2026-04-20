@@ -1,10 +1,14 @@
 # Note: edges are stored as sets (fast dedup + O(1) lookup).
 # If we later need deterministic execution order across parallel
 # branches, switching to lists may be needed
+from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from tinygraph.graph import CompiledGraph
 
 START: Final[str] = "__start__"
 END: Final[str] = "__end__"
@@ -46,6 +50,10 @@ class StateGraph[StateT]:
             ValueError: if either endpoint is an unknown node
                 (START and END are always valid).
         """
+        if from_node == END:
+            raise ValueError(f"Non valid value {END} for source node")
+        if to_node == START:
+            raise ValueError(f"None valid value {START} for target node")
         if from_node != START and from_node not in self.nodes:
             raise ValueError(f"Unknown source node: {from_node}")
         if to_node != END and to_node not in self.nodes:
@@ -55,3 +63,13 @@ class StateGraph[StateT]:
     def successors(self, name: str) -> set[str]:
         """Return the direct successors of `name` (empty set if none)."""
         return self.edges.get(name, set())
+
+    def compile(self) -> CompiledGraph[StateT]:
+        """Compile this builder into an executable graph.
+
+        Raises:
+            ValueError: if the graph is invalid (no START edge, END unreachable).
+        """
+        from tinygraph.graph import CompiledGraph
+
+        return CompiledGraph(self)
