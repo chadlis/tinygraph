@@ -58,8 +58,6 @@ def test_add_edge_stores_edge() -> None:
     builder.add_node("a", _noop)
     builder.add_edge(START, "a")
     builder.add_edge("a", END)
-    # The exact shape of `edges` is your design choice.
-    # But we should be able to ask: "what are the successors of X?"
     assert "a" in builder.successors(START)
     assert END in builder.successors("a")
 
