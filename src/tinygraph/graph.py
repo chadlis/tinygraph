@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Annotated, Any, Final, cast, get_args, get_origin, get_type_hints
 
 from tinygraph.state import END, START
 
@@ -20,6 +20,7 @@ class CompiledGraph[StateT]:
         }
         self._state_schema = state_graph.state_schema
         self._validate()
+        self._reducers = self._get_reducers()
 
     def _validate(self) -> None:
         if (START not in self._edges) or (not self._edges[START]):
@@ -35,6 +36,14 @@ class CompiledGraph[StateT]:
                 )
         if not self._is_end_reachable():
             raise ValueError("Graph has no path from START to END!")
+
+    def _get_reducers(self) -> dict[str, Callable[[Any, Any], Any]]:
+        reducers: dict[str, Callable[[Any, Any], Any]] = {}
+        type_hints = get_type_hints(self._state_schema, include_extras=True)
+        for key in type_hints:
+            if get_origin(type_hints[key]) is Annotated:
+                reducers[key] = get_args(type_hints[key])[1]
+        return reducers
 
     def _is_end_reachable(self) -> bool:
         """Return True if END is reachable from START via the edges."""
@@ -63,7 +72,12 @@ class CompiledGraph[StateT]:
                 return cast(StateT, state)
             node_func = self._nodes[current]
             update = node_func(cast(StateT, state))
-            state = {**state, **update}
+            for key in update:
+                if key in state:
+                    if key in self._reducers:
+                        state[key] = self._reducers[key](state[key], update[key])
+                    else:
+                        state[key] = update[key]
             current = self._get_next_node(current, state)
         raise RecursionError(f"Graph exceeded {recursion_limit} steps")
 
@@ -73,7 +87,7 @@ class CompiledGraph[StateT]:
         if node_name in self._edges:
             return next(iter(self._edges[node_name]))
         if node_name not in self._conditional_edges:
-            raise RuntimeError(f"'{node_name}' has no fix nor coniditional edges!")
+            raise RuntimeError(f"'{node_name}' has no fix nor conditional edges!")
         (routing_function, routing_path) = self._conditional_edges[node_name]
         routing_result = routing_function(cast(StateT, state))
         if routing_result not in routing_path:
