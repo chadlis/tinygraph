@@ -17,8 +17,8 @@ uv pip install -e ".[dev]"
 
 - [x] StateGraph builder
 - [x] Sequential execution
-- [ ] Reducers
-- [ ] Conditional edges
+- [x] Conditional edges
+- [x] Reducers
 - [ ] Cycles
 - [ ] Streaming
 - [ ] Checkpointing
