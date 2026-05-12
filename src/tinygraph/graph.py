@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import reduce
 from typing import TYPE_CHECKING, Annotated, Any, Final, cast, get_args, get_origin, get_type_hints
 
 from tinygraph.state import END, START
@@ -63,29 +64,52 @@ class CompiledGraph[StateT]:
                         to_visit.extend(cond[1].values())
         return False
 
-    def invoke(self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS) -> StateT:
+    def invoke(
+        self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS, current=START
+    ) -> StateT:
         state: dict[str, Any] = {**cast(dict[str, Any], initial_state)}
-        current = START
-        current = self._get_next_node(current, state)
-        for _ in range(recursion_limit):
-            if current == END:
-                return cast(StateT, state)
+        if recursion_limit == 0:
+            raise RecursionError("Graph exceeded recursion limit")
+        if current == END:
+            return cast(StateT, state)
+        if current != START:
             node_func = self._nodes[current]
             update = node_func(cast(StateT, state))
-            for key in update:
-                if key in state:
-                    if key in self._reducers:
-                        state[key] = self._reducers[key](state[key], update[key])
-                    else:
-                        state[key] = update[key]
-            current = self._get_next_node(current, state)
-        raise RecursionError(f"Graph exceeded {recursion_limit} steps")
+            self._apply_update(state, update)
+        next_nodes = self._get_next_nodes(current, state)
+        states = [
+            {
+                **cast(
+                    dict[str, Any],
+                    self.invoke(
+                        cast(StateT, state),
+                        recursion_limit=recursion_limit - 1,
+                        current=node,
+                    ),
+                )
+            }
+            for node in next_nodes
+        ]
+        new_state = reduce(self._apply_update, states)
+        if new_state is not None:
+            state = new_state
+        return cast(StateT, state)
 
-    def _get_next_node(
+    def _apply_update(self, state, update):
+        for key in update:
+            if key in state:
+                if key in self._reducers:
+                    state[key] = self._reducers[key](state[key], update[key])
+                else:
+                    state[key] = update[key]
+        return state
+        # current = self._get_next_nodes(current, state)
+
+    def _get_next_nodes(
         self, node_name: str, state: dict[str, Any]
-    ) -> str:  #! TODO: modify when // fan-out is implemented
+    ) -> set[str]:  #! TODO: typing to fix
         if node_name in self._edges:
-            return next(iter(self._edges[node_name]))
+            return self._edges[node_name]
         if node_name not in self._conditional_edges:
             raise RuntimeError(f"'{node_name}' has no fix nor conditional edges!")
         (routing_function, routing_path) = self._conditional_edges[node_name]
@@ -95,4 +119,4 @@ class CompiledGraph[StateT]:
                 f"Router returned '{routing_result}' "
                 f"but it's not in the path_map of node '{node_name}'"
             )
-        return routing_path[routing_result]
+        return set(routing_path[routing_result])

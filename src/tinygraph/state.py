@@ -59,12 +59,6 @@ class StateGraph[StateT]:
             raise ValueError(f"Unknown source node: {from_node}")
         if to_node != END and to_node not in self.nodes:
             raise ValueError(f"Unknown target node: {to_node}")
-        #! TODO : remove it after parallel fan-out is impelemented
-        if self.edges.get(from_node):
-            raise ValueError(
-                f"Node '{from_node}' already has an outgoing edge. "
-                "Use `add_conditional_edges()` for branching."
-            )
         if self.conditional_edges.get(from_node):
             raise ValueError(f"Node '{from_node}' already has a conditional edge.")
         self.edges[from_node].add(to_node)
