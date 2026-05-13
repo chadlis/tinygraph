@@ -19,6 +19,6 @@ uv pip install -e ".[dev]"
 - [x] Sequential execution
 - [x] Conditional edges
 - [x] Reducers
-- [ ] Cycles
+- [x] Parallel fan-out/fan-in
 - [ ] Streaming
 - [ ] Checkpointing
