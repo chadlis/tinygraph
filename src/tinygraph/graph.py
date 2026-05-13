@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Annotated, Any, Final, cast, get_args, get_origin, get_type_hints
+from collections.abc import Callable, Iterator
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Final,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from tinygraph.state import END, START
 
@@ -77,7 +86,9 @@ class CompiledGraph[StateT]:
                         to_visit.extend(cond[1].values())
         return False
 
-    def invoke(self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS) -> StateT:
+    def _run_steps(
+        self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS
+    ) -> Iterator[StateT]:
         state: dict[str, Any] = {**cast(dict[str, Any], initial_state)}
         completed: set[str] = {START}
         activated: set[str] = {START}
@@ -86,7 +97,7 @@ class CompiledGraph[StateT]:
 
         for _ in range(recursion_limit):
             if END in frontier:
-                return cast(StateT, state)
+                return
 
             snapshot = dict(state)
             updates: list[dict[str, Any]] = []
@@ -98,6 +109,9 @@ class CompiledGraph[StateT]:
                 self._apply_update(state, update)
 
             completed |= frontier
+
+            yield cast(StateT, {**state})
+
             frontier = self._next_frontier(frontier, completed, activated, state)
             activated |= frontier
 
@@ -105,6 +119,17 @@ class CompiledGraph[StateT]:
                 raise RuntimeError("Graph stuck: no nodes ready and END not reached.")
 
         raise RecursionError(f"Graph exceeded {recursion_limit} steps")
+
+    def invoke(self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS) -> StateT:
+        result: StateT = cast(StateT, initial_state)
+        for step in self._run_steps(initial_state, recursion_limit=recursion_limit):
+            result = step
+        return result
+
+    def stream(
+        self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS
+    ) -> Iterator[StateT]:
+        return self._run_steps(initial_state, recursion_limit=recursion_limit)
 
     def _next_frontier(
         self,
