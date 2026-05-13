@@ -1,6 +1,6 @@
 """Tests for CompiledGraph.stream()."""
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from tinygraph import END, START, StateGraph
 
@@ -10,10 +10,10 @@ class St(TypedDict):
 
 
 def _linear_graph() -> StateGraph[St]:
-    def a(s: St) -> St:
+    def a(s: St) -> dict[str, Any]:
         return {"val": s["val"] + "-A"}
 
-    def b(s: St) -> St:
+    def b(s: St) -> dict[str, Any]:
         return {"val": s["val"] + "-B"}
 
     g = StateGraph(St)

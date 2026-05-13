@@ -119,7 +119,7 @@ class CompiledGraph[StateT]:
         raise RecursionError(f"Graph exceeded {recursion_limit} steps")
 
     def invoke(self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS) -> StateT:
-        result: StateT = cast(StateT, initial_state)
+        result: StateT = initial_state
         for step in self._run_steps(initial_state, recursion_limit=recursion_limit):
             result = step
         return result
