@@ -13,6 +13,7 @@ from typing import (
     get_type_hints,
 )
 
+from tinygraph.checkpoint import BaseCheckpointer
 from tinygraph.state import END, START
 
 if TYPE_CHECKING:
@@ -22,7 +23,9 @@ MAX_STEPS: Final[int] = 25
 
 
 class CompiledGraph[StateT]:
-    def __init__(self, state_graph: StateGraph[StateT]) -> None:
+    def __init__(
+        self, state_graph: StateGraph[StateT], checkpointer: BaseCheckpointer | None = None
+    ) -> None:
         self._nodes = dict(state_graph.nodes)
         self._edges = {k: set(v) for k, v in state_graph.edges.items()}
         self._conditional_edges: dict[str, tuple[Callable[[StateT], str], dict[str, str]]] = {
@@ -32,6 +35,7 @@ class CompiledGraph[StateT]:
         self._validate()
         self._reducers = self._get_reducers()
         self._predecessors = self._build_predecessors()
+        self._checkpointer = checkpointer
 
     def _validate(self) -> None:
         if (START not in self._edges) or (not self._edges[START]):
@@ -118,10 +122,29 @@ class CompiledGraph[StateT]:
 
         raise RecursionError(f"Graph exceeded {recursion_limit} steps")
 
-    def invoke(self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS) -> StateT:
-        result: StateT = initial_state
-        for step in self._run_steps(initial_state, recursion_limit=recursion_limit):
+    def invoke(
+        self,
+        initial_state: StateT,
+        *,
+        config: dict[str, str] | None = None,
+        recursion_limit: int = MAX_STEPS,
+    ) -> StateT:
+        state = {**cast(dict[str, Any], initial_state)}
+
+        if config is not None and self._checkpointer is not None:
+            thread_id = config["thread_id"]
+            saved = self._checkpointer.get(thread_id)
+            if saved is not None:
+                state = dict(saved)
+                self._apply_update(state, cast(dict[str, Any], initial_state))
+
+        result: StateT = cast(StateT, state)
+        for step in self._run_steps(cast(StateT, state), recursion_limit=recursion_limit):
             result = step
+
+        if config is not None and self._checkpointer is not None:
+            self._checkpointer.put(config["thread_id"], {**cast(dict[str, Any], result)})
+
         return result
 
     def stream(

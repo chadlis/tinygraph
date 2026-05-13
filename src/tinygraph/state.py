@@ -7,6 +7,8 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Final
 
+from tinygraph.checkpoint import BaseCheckpointer
+
 if TYPE_CHECKING:
     from tinygraph.graph import CompiledGraph
 
@@ -90,7 +92,7 @@ class StateGraph[StateT]:
             return self.edges.get(name, set()) | set(cond[1].values())
         return self.edges.get(name, set())
 
-    def compile(self) -> CompiledGraph[StateT]:
+    def compile(self, checkpointer: BaseCheckpointer | None = None) -> CompiledGraph[StateT]:
         """Compile this builder into an executable graph.
 
         Raises:
@@ -98,4 +100,4 @@ class StateGraph[StateT]:
         """
         from tinygraph.graph import CompiledGraph
 
-        return CompiledGraph(self)
+        return CompiledGraph(self, checkpointer)
