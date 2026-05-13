@@ -20,5 +20,5 @@ uv pip install -e ".[dev]"
 - [x] Conditional edges
 - [x] Reducers
 - [x] Parallel fan-out/fan-in
-- [ ] Streaming
-- [ ] Checkpointing
+- [x] Streaming
+- [x] Checkpointing
