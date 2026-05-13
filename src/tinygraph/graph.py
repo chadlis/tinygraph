@@ -35,9 +35,7 @@ class CompiledGraph[StateT]:
 
     def _validate(self) -> None:
         if (START not in self._edges) or (not self._edges[START]):
-            raise ValueError(
-                "Graph has no edge from START! " "Did you forget `add_edge(Start, ...)`?"
-            )
+            raise ValueError("Graph has no edge from START! Did you forget `add_edge(Start, ...)`?")
         for node_name in self._nodes:
             if (not self._edges.get(node_name, set())) and (
                 node_name not in self._conditional_edges
