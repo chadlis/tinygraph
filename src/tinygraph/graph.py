@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Annotated, Any, Final, cast, get_args, get_origin, get_type_hints
 
@@ -21,10 +22,13 @@ class CompiledGraph[StateT]:
         self._state_schema = state_graph.state_schema
         self._validate()
         self._reducers = self._get_reducers()
+        self._predecessors = self._build_predecessors()
 
     def _validate(self) -> None:
         if (START not in self._edges) or (not self._edges[START]):
-            raise ValueError("Graph has no edge from START! Did you forget `add_edge(Start, ...)`?")
+            raise ValueError(
+                "Graph has no edge from START! " "Did you forget `add_edge(Start, ...)`?"
+            )
         for node_name in self._nodes:
             if (not self._edges.get(node_name, set())) and (
                 node_name not in self._conditional_edges
@@ -45,6 +49,16 @@ class CompiledGraph[StateT]:
                 reducers[key] = get_args(type_hints[key])[1]
         return reducers
 
+    def _build_predecessors(self) -> dict[str, set[str]]:
+        predecessors: defaultdict[str, set[str]] = defaultdict(set)
+        for source, targets in self._edges.items():
+            for target in targets:
+                predecessors[target].add(source)
+        for source, (_, path_map) in self._conditional_edges.items():
+            for target in path_map.values():
+                predecessors[target].add(source)
+        return dict(predecessors)
+
     def _is_end_reachable(self) -> bool:
         """Return True if END is reachable from START via the edges."""
         to_visit: list[str] = list(self._edges[START])
@@ -56,7 +70,7 @@ class CompiledGraph[StateT]:
             if current not in visited:
                 visited.add(current)
                 if current in self._edges:
-                    to_visit.extend(self._edges.get(current, set()))
+                    to_visit.extend(self._edges[current])
                 if current in self._conditional_edges:
                     cond = self._conditional_edges.get(current)
                     if cond:
@@ -65,29 +79,61 @@ class CompiledGraph[StateT]:
 
     def invoke(self, initial_state: StateT, *, recursion_limit: int = MAX_STEPS) -> StateT:
         state: dict[str, Any] = {**cast(dict[str, Any], initial_state)}
-        current = START
-        current = self._get_next_node(current, state)
+        completed: set[str] = {START}
+        activated: set[str] = {START}
+        frontier = self._next_frontier({START}, completed, activated, state)
+        activated |= frontier
+
         for _ in range(recursion_limit):
-            if current == END:
+            if END in frontier:
                 return cast(StateT, state)
-            node_func = self._nodes[current]
-            update = node_func(cast(StateT, state))
-            for key in update:
-                if key in state:
-                    if key in self._reducers:
-                        state[key] = self._reducers[key](state[key], update[key])
-                    else:
-                        state[key] = update[key]
-            current = self._get_next_node(current, state)
+
+            snapshot = dict(state)
+            updates: list[dict[str, Any]] = []
+            for node_name in frontier:
+                node_func = self._nodes[node_name]
+                updates.append(node_func(cast(StateT, snapshot)))
+
+            for update in updates:
+                self._apply_update(state, update)
+
+            completed |= frontier
+            frontier = self._next_frontier(frontier, completed, activated, state)
+            activated |= frontier
+
+            if not frontier:
+                raise RuntimeError("Graph stuck: no nodes ready and END not reached.")
+
         raise RecursionError(f"Graph exceeded {recursion_limit} steps")
 
-    def _get_next_node(
-        self, node_name: str, state: dict[str, Any]
-    ) -> str:  #! TODO: modify when // fan-out is implemented
+    def _next_frontier(
+        self,
+        current_frontier: set[str],
+        completed: set[str],
+        activated: set[str],
+        state: dict[str, Any],
+    ) -> set[str]:
+        candidates: set[str] = set()
+        for node_name in current_frontier:
+            candidates |= self._get_next_nodes(node_name, state)
+        barrier_scope = activated | candidates
+        return {
+            n for n in candidates if (self._predecessors.get(n, set()) & barrier_scope) <= completed
+        }
+
+    def _apply_update(self, state: dict[str, Any], update: dict[str, Any]) -> None:
+        for key in update:
+            if key in state:
+                if key in self._reducers:
+                    state[key] = self._reducers[key](state[key], update[key])
+                else:
+                    state[key] = update[key]
+
+    def _get_next_nodes(self, node_name: str, state: dict[str, Any]) -> set[str]:
         if node_name in self._edges:
-            return next(iter(self._edges[node_name]))
+            return self._edges[node_name]
         if node_name not in self._conditional_edges:
-            raise RuntimeError(f"'{node_name}' has no fix nor conditional edges!")
+            raise RuntimeError(f"'{node_name}' has no fixed nor conditional edges!")
         (routing_function, routing_path) = self._conditional_edges[node_name]
         routing_result = routing_function(cast(StateT, state))
         if routing_result not in routing_path:
@@ -95,4 +141,4 @@ class CompiledGraph[StateT]:
                 f"Router returned '{routing_result}' "
                 f"but it's not in the path_map of node '{node_name}'"
             )
-        return routing_path[routing_result]
+        return {routing_path[routing_result]}
